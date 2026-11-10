@@ -6,18 +6,32 @@ const HIST_DAYS = 7;
 const Z80 = 1.2816;
 const HOSTS = ['https://data-api.binance.vision', 'https://api.binance.com'];
 const SYMBOLS = [
-  { s: 'BTCUSDT', n: 'بيتكوين (BTC)' },
-  { s: 'ETHUSDT', n: 'إيثيريوم (ETH)' },
-  { s: 'PAXGUSDT', n: 'ذهب — أونصة (PAXG)' },
-  { s: 'EURUSDT', n: 'يورو / دولار (EUR)' },
-  { s: 'SOLUSDT', n: 'سولانا (SOL)' },
-  { s: 'BNBUSDT', n: 'BNB' },
-  { s: 'XRPUSDT', n: 'ريبل (XRP)' },
+  { s: 'PAXGUSDT', g: 'ذهب', b: '🥇 ذهب', n: 'ذهب — أونصة بالدولار (PAXG)' },
+  { s: 'XAUTUSDT', g: 'ذهب', b: '🥇 ذهب XAUT', n: 'ذهب — أونصة بالدولار (XAUT)' },
+  { s: 'EURUSDT', g: 'عملات', b: '🇪🇺 يورو', n: 'يورو — سعر اليورو بالدولار' },
+  { s: 'GBPUSDT', g: 'عملات', b: '🇬🇧 إسترليني', n: 'جنيه إسترليني — سعرو بالدولار' },
+  { s: 'AUDUSDT', g: 'عملات', b: '🇦🇺 دولار أسترالي', n: 'دولار أسترالي — سعرو بالدولار الأميركي' },
+  { s: 'USDTTRY', g: 'عملات', b: '🇹🇷 ليرة تركية', n: 'الدولار بالليرة التركية' },
+  { s: 'USDTRUB', g: 'عملات', b: '🇷🇺 روبل', n: 'الدولار بالروبل الروسي' },
+  { s: 'USDTBRL', g: 'عملات', b: '🇧🇷 ريال برازيلي', n: 'الدولار بالريال البرازيلي' },
+  { s: 'USDTMXN', g: 'عملات', b: '🇲🇽 بيزو مكسيكي', n: 'الدولار بالبيزو المكسيكي' },
+  { s: 'USDTARS', g: 'عملات', b: '🇦🇷 بيزو أرجنتيني', n: 'الدولار بالبيزو الأرجنتيني' },
+  { s: 'USDTZAR', g: 'عملات', b: '🇿🇦 راند', n: 'الدولار بالراند الجنوب أفريقي' },
+  { s: 'USDTPLN', g: 'عملات', b: '🇵🇱 زلوتي', n: 'الدولار بالزلوتي البولندي' },
+  { s: 'USDTUAH', g: 'عملات', b: '🇺🇦 هريفنيا', n: 'الدولار بالهريفنيا الأوكرانية' },
+  { s: 'USDTCZK', g: 'عملات', b: '🇨🇿 كورونا تشيكية', n: 'الدولار بالكورونا التشيكية' },
+  { s: 'USDTCOP', g: 'عملات', b: '🇨🇴 بيزو كولومبي', n: 'الدولار بالبيزو الكولومبي' },
+  { s: 'USDTIDR', g: 'عملات', b: '🇮🇩 روبية', n: 'الدولار بالروبية الإندونيسية' },
+  { s: 'BTCUSDT', g: 'كريبتو', b: 'بيتكوين', n: 'بيتكوين (BTC) بالدولار' },
+  { s: 'ETHUSDT', g: 'كريبتو', b: 'إيثيريوم', n: 'إيثيريوم (ETH) بالدولار' },
+  { s: 'SOLUSDT', g: 'كريبتو', b: 'سولانا', n: 'سولانا (SOL) بالدولار' },
+  { s: 'BNBUSDT', g: 'كريبتو', b: 'BNB', n: 'BNB بالدولار' },
+  { s: 'XRPUSDT', g: 'كريبتو', b: 'ريبل', n: 'ريبل (XRP) بالدولار' },
 ];
 
 const $ = id => document.getElementById(id);
 const state = {
-  sym: localStorage.getItem('fc:sym') || 'BTCUSDT',
+  sym: localStorage.getItem('fc:sym2') || 'PAXGUSDT',
   store: null,        // { start, c: [] } one close per minute, start aligned to local midnight
   model: null,        // seasonal model for the current day
   modelKey: '',
@@ -96,7 +110,9 @@ async function sync(onProgress) {
     next = st.start + st.c.length * MIN;
     if (onProgress) onProgress(Math.min(1, added / total));
     if (rows.length < 1000) break;
+    if (state.sym !== sym) throw new Error('switched');
   }
+  if (state.sym !== sym) throw new Error('switched');
   state.store = st;
   saveStore(sym, st);
   return added;
@@ -390,6 +406,7 @@ async function tick(first) {
     return;
   }
   state.busy = true;
+  const sym = state.sym;
   const prevL = state.store ? state.store.c.length - 1 : null;
   try {
     setStatus('busy', first ? 'عم حمّل آخر 7 أيام…' : 'عم حدّث…');
@@ -401,11 +418,14 @@ async function tick(first) {
     state.lastSync = Date.now();
     setStatus('on', 'محدَّث ' + hhmm(Date.now()));
   } catch (e) {
-    setStatus('off', 'تعذر الاتصال بالبيانات — رح جرّب كمان شوي');
-    if (state.store && state.store.c.length > 1) render(state.store.c.length - 1);
+    if (state.sym === sym) {
+      setStatus('off', 'تعذر الاتصال بالبيانات — رح جرّب كمان شوي');
+      if (state.store && state.store.c.length > 1) render(state.store.c.length - 1);
+    }
   } finally {
     state.busy = false;
   }
+  if (state.sym !== sym) tick(!state.store);
 }
 
 function scheduleNext() {
@@ -414,15 +434,31 @@ function scheduleNext() {
 }
 
 // ---------- boot ----------
-const sel = $('sym');
-sel.innerHTML = SYMBOLS.map(x => `<option value="${x.s}">${x.n}</option>`).join('');
-sel.value = state.sym;
-sel.onchange = () => {
-  state.sym = sel.value;
-  localStorage.setItem('fc:sym', state.sym);
-  state.store = null; state.model = null; state.modelKey = ''; state.shownL = null;
-  tick(true);
-};
+function renderPicker() {
+  const groups = [...new Set(SYMBOLS.map(x => x.g))];
+  $('picker').innerHTML = groups.map(g => `<span class="grp">${g}</span>` +
+    SYMBOLS.filter(x => x.g === g).map(x => `<button data-s="${x.s}" class="${x.s === state.sym ? 'on' : ''}">${x.b}</button>`).join('')).join('');
+  $('picker').querySelectorAll('button').forEach(b => b.onclick = () => selectSym(b.dataset.s));
+  const p = $('picker'), on = p.querySelector('.on');
+  if (on) p.scrollLeft += on.getBoundingClientRect().left - p.getBoundingClientRect().left - (p.clientWidth - on.offsetWidth) / 2;
+}
+
+function selectSym(s) {
+  if (s === state.sym) return;
+  state.sym = s;
+  localStorage.setItem('fc:sym2', s);
+  state.store = loadStore(s); state.model = null; state.modelKey = ''; state.shownL = null; lastA = null;
+  renderPicker();
+  for (const id of ['price', 'chg', 'eod', 'eodRange', 'h1', 'h1Range', 'accDay', 'accH', 'accDir']) $(id).textContent = '—';
+  $('symName').textContent = (SYMBOLS.find(x => x.s === s) || {}).n || s;
+  $('tb').innerHTML = '';
+  const cv = $('cv'); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height);
+  if (state.store && state.store.c.length > 1) { render(state.store.c.length - 1); state.shownL = state.store.c.length - 1; }
+  tick(!state.store);
+}
+
+renderPicker();
+$('symName').textContent = (SYMBOLS.find(x => x.s === state.sym) || {}).n || state.sym;
 
 window.addEventListener('online', () => tick(false));
 window.addEventListener('offline', () => setStatus('off', 'غير متصل — بكمّل لما ترجع'));

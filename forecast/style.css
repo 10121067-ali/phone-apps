@@ -1,7 +1,13 @@
 * { box-sizing: border-box; }
 body { margin: 0; font-family: system-ui, "Segoe UI", Tahoma, sans-serif; background: #0b1020; color: #e5e9f5; }
-header { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; padding: 10px 12px; padding-top: calc(10px + env(safe-area-inset-top)); background: #0b1020ee; backdrop-filter: blur(6px); border-bottom: 1px solid #1a2240; }
-select { flex: 1; font-size: 16px; padding: 9px 10px; border-radius: 10px; border: 1px solid #2a3560; background: #141b35; color: #e5e9f5; }
+header { position: sticky; top: 0; z-index: 5; padding: 8px 0 8px; padding-top: calc(8px + env(safe-area-inset-top)); background: #0b1020ee; backdrop-filter: blur(6px); border-bottom: 1px solid #1a2240; }
+.top { display: flex; justify-content: space-between; align-items: center; padding: 0 12px 8px; }
+.title { font-size: 17px; }
+.picker { display: flex; gap: 7px; align-items: center; overflow-x: auto; padding: 0 12px 2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.picker::-webkit-scrollbar { display: none; }
+.picker .grp { flex: none; font-size: 11.5px; color: #6f7ba0; padding: 0 4px 0 2px; }
+.picker button { flex: none; font-size: 14.5px; padding: 8px 13px; border-radius: 999px; border: 1px solid #2a3560; background: #141b35; color: #cfd6ee; white-space: nowrap; }
+.picker button.on { background: #f59e0b; border-color: #f59e0b; color: #1a1205; font-weight: 800; }
 .status { display: flex; gap: 6px; align-items: center; font-size: 12.5px; color: #9aa6c8; white-space: nowrap; }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: #ef4444; }
 .dot.on { background: #22c55e; }
