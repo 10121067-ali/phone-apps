@@ -1,5 +1,5 @@
-const CACHE = 'uno400-v2';
-const SHELL = ['./', 'index.html', 'style.css', 'game.js', 'manifest.json', 'icon.svg', 'icon-192.png', 'icon-512.png'];
+const CACHE = 'uno400-v3';
+const SHELL = ['./', 'index.html', 'style.css', 'game.js', 'install.js', 'manifest.json', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

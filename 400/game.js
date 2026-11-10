@@ -603,13 +603,21 @@ function showRules() {
 $('name').value = localStorage.getItem('400:name') || '';
 $('name').oninput = () => localStorage.setItem('400:name', $('name').value);
 const params = new URLSearchParams(location.search);
-const joinCode = (params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+let joinCode = (params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+// installing from an invite opens the app without ?room, so remember the invite for a while
+if (joinCode) localStorage.setItem('400:invite', JSON.stringify({ code: joinCode, t: Date.now() }));
+else {
+  try {
+    const inv = JSON.parse(localStorage.getItem('400:invite'));
+    if (inv && Date.now() - inv.t < 3 * 3600e3) joinCode = inv.code;
+  } catch {}
+}
 if (joinCode) { $('joinBox').classList.remove('hidden'); $('joinCode').textContent = joinCode; $('btnHost').classList.remove('p'); }
 
 const needName = () => { if (!$('name').value.trim()) { toast('اكتب اسمك أول'); $('name').focus(); return true; } return false; };
 $('btnJoin').onclick = () => { if (!needName()) joinGame(joinCode); };
-$('btnHost').onclick = () => { if (!needName()) hostGame(false); };
-$('btnBots').onclick = () => hostGame(true);
+$('btnHost').onclick = () => { if (!needName()) { localStorage.removeItem('400:invite'); hostGame(false); } };
+$('btnBots').onclick = () => { localStorage.removeItem('400:invite'); hostGame(true); };
 $('btnRules').onclick = showRules;
 $('btnRules2').onclick = showRules;
 $('btnStart').onclick = () => { show('game'); newGame(); changed(); };
@@ -620,25 +628,8 @@ $('btnWa').onclick = () => window.open('https://wa.me/?text=' + encodeURICompone
 $('btnShare').onclick = () => { if (navigator.share) navigator.share({ title: '400 أونو', text: inviteText() }).catch(() => {}); else $('btnCopy').onclick(); };
 document.querySelectorAll('.micBtn').forEach(b => b.onclick = toggleMic);
 
-let installEvt = null;
-const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-if (!standalone) $('btnInstall').classList.remove('hidden');
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; });
-window.addEventListener('appinstalled', () => { $('btnInstall').classList.add('hidden'); toast('نزل التطبيق ✓ لاقيه عالشاشة'); });
-$('btnInstall').onclick = async () => {
-  if (installEvt) {
-    installEvt.prompt();
-    const r = await installEvt.userChoice.catch(() => null);
-    if (r && r.outcome === 'accepted') $('btnInstall').classList.add('hidden');
-    installEvt = null;
-    return;
-  }
-  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  $('modal').dataset.rules = '';
-  showModal(ios
-    ? `<h3>نزّل اللعبة على الآيفون</h3><ol class="steps"><li>افتح الرابط من <b>Safari</b></li><li>كبّس زر المشاركة <b>⬆️</b> تحت</li><li>اختار <b>Add to Home Screen</b> (إضافة إلى الشاشة الرئيسية)</li><li>كبّس <b>Add</b></li></ol><button class="p" onclick="document.getElementById('modal').classList.add('hidden')">تمام</button>`
-    : `<h3>نزّل اللعبة على التلفون</h3><ol class="steps"><li>افتح الرابط من <b>Chrome</b></li><li>كبّس القائمة <b>⋮</b> فوق</li><li>اختار <b>Install app</b> أو <b>Add to Home screen</b></li></ol><button class="p" onclick="document.getElementById('modal').classList.add('hidden')">تمام</button>`);
-};
+if (!window.pwaInstall || !pwaInstall.standalone) $('btnInstall').classList.remove('hidden');
+$('btnInstall').onclick = () => window.pwaInstall && pwaInstall.open();
 
 window.addEventListener('beforeunload', e => { if (net.mode === 'host' && G && G.phase !== 'lobby') { e.preventDefault(); e.returnValue = ''; } });
 

@@ -1,5 +1,5 @@
-const CACHE = 'forecast-v2';
-const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'manifest.json', 'icon.svg'];
+const CACHE = 'forecast-v3';
+const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'install.js', 'manifest.json', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
