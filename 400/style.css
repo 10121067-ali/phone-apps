@@ -15,6 +15,12 @@ button { font-family: inherit; border: 0; border-radius: 12px; padding: 11px; fo
 button.big { padding: 15px; font-size: 17px; font-weight: 700; }
 button.p { background: #f59e0b; color: #1c1917; }
 button.wa { background: #22c55e; color: #052e16; font-weight: 700; }
+button.install { background: #0ea5e9; color: #fff; }
+.micBtn.live { background: #22c55e; box-shadow: 0 0 0 3px #86efac66; }
+.micWide { font-size: 15px; }
+.micWide::after { content: ' شغّل الميكروفون'; }
+.micWide.live::after { content: ' الميكروفون شغّال — كبّس لتسكّرو'; }
+.steps { line-height: 2; font-size: 15px; }
 button.link { background: none; text-decoration: underline; color: #cbd5e1; }
 button:disabled { opacity: .45; }
 .box { background: #00000033; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }

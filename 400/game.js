@@ -7,6 +7,11 @@ const COLOR_NAME = { R: 'أحمر', Y: 'أصفر', G: 'أخضر', B: 'أزرق' 
 const PREFIX = 'uno400-lb-';
 const WIN_SCORE = 41;
 const label = r => (r <= 9 ? String(r) : r === 10 ? '⊘' : r === 11 ? '⇄' : '+2');
+// strength: 1 = ace (آص), skip = king (ري), +2 = queen (بنت), reverse = jack (شب), 0 = ten, then 9..2
+const POW = [10, 14, 2, 3, 4, 5, 6, 7, 8, 9, 13, 11, 12];
+const FACE = { 1: 'A', 10: 'K', 12: 'Q', 11: 'J', 0: '10' };
+const pw = c => POW[c.r];
+const face = r => FACE[r] || String(r);
 const cid = c => c.c + c.r;
 const partnerOf = s => (s + 2) % 4;
 const bidPoints = b => (b >= 5 ? b * 2 : b);
@@ -21,8 +26,9 @@ function newDeck() {
   }
   return d;
 }
-const sortHand = h => h.slice().sort((a, b) => COLORS.indexOf(a.c) - COLORS.indexOf(b.c) || b.r - a.r);
-const beats = (a, b) => (a.c === b.c ? a.r > b.r : a.c === TRUMP);
+const ALL = COLORS.flatMap(c => Array.from({ length: 13 }, (_, r) => ({ c, r })));
+const sortHand = h => h.slice().sort((a, b) => COLORS.indexOf(a.c) - COLORS.indexOf(b.c) || pw(b) - pw(a));
+const beats = (a, b) => (a.c === b.c ? pw(a) > pw(b) : a.c === TRUMP);
 function trickWinner(trick) {
   let best = trick[0];
   for (const t of trick.slice(1)) if (beats(t.card, best.card)) best = t;
@@ -55,6 +61,7 @@ function startRound() {
   G.bids = [null, null, null, null];
   G.tricks = [0, 0, 0, 0];
   G.trick = []; G.lastTrick = null; G.clearing = false;
+  G.played = []; G.voids = [[], [], [], []];
   G.turn = (G.dealer + 1) % 4;
   G.phase = 'bidding';
   G.msg = `الجولة ${G.round} — الطلب`;
@@ -93,6 +100,8 @@ function playCard(seat, id) {
   if (!card) return 'ورقة غلط';
   if (!legalCards(hand, G.trick).includes(card)) return `لازم تلحق اللون ${COLOR_NAME[G.trick[0].card.c]}`;
   G.hands[seat] = hand.filter(c => c !== card);
+  if (G.trick.length && card.c !== G.trick[0].card.c && !G.voids[seat].includes(G.trick[0].card.c)) G.voids[seat].push(G.trick[0].card.c);
+  G.played.push(cid(card));
   G.trick.push({ seat, card });
   if (G.trick.length < 4) { G.turn = (G.turn + 1) % 4; return null; }
 
@@ -128,50 +137,149 @@ function endRound() {
 const seatName = s => (G.seats[s] ? G.seats[s].name : '—');
 
 // ---------- bots ----------
-function botBid(seat) {
-  const hand = G.hands[seat];
-  let est = 0;
-  const trumps = hand.filter(c => c.c === TRUMP);
-  for (const c of trumps) est += c.r >= 10 ? 1 : c.r >= 7 ? 0.5 : 0;
-  est += Math.max(0, trumps.length - 4) * 0.6;
-  for (const col of COLORS.filter(x => x !== TRUMP)) {
-    const cs = hand.filter(c => c.c === col);
-    if (cs.some(c => c.r === 12)) est += 1;
-    if (cs.some(c => c.r === 11) && cs.length >= 2) est += 0.6;
-    if (cs.length <= 1 && trumps.length >= 3) est += 0.5;
+// Bots sample the hidden hands many times (respecting known voids), play each
+// sample out with a fast card-counting policy, and pick the move with the best
+// average team result.
+const rnd = n => Math.floor(Math.random() * n);
+const now = () => performance.now();
+// cheaper-to-spend first: non-trumps before trumps, then low before high
+const cheaper = (a, b) => (a.c === TRUMP) - (b.c === TRUMP) || pw(a) - pw(b);
+const cheapest = cs => cs.reduce((m, c) => (cheaper(c, m) < 0 ? c : m));
+
+function dealHidden(me, unknown, counts, voids) {
+  for (let attempt = 0; attempt < 25; attempt++) {
+    const hands = [[], [], [], []], need = counts.slice();
+    need[me] = 0;
+    const cards = unknown.slice();
+    for (let i = cards.length - 1; i > 0; i--) { const j = rnd(i + 1); [cards[i], cards[j]] = [cards[j], cards[i]]; }
+    const takers = c => [0, 1, 2, 3].filter(s => s !== me && !voids[s].includes(c.c));
+    cards.sort((a, b) => takers(a).length - takers(b).length);
+    let ok = true;
+    for (const c of cards) {
+      const o = takers(c).filter(s => need[s] > 0);
+      if (!o.length) { ok = false; break; }
+      let k = Math.random() * o.reduce((x, s) => x + need[s], 0), s = o[0];
+      for (const x of o) { k -= need[x]; if (k < 0) { s = x; break; } }
+      hands[s].push(c); need[s]--;
+    }
+    if (ok) return hands;
   }
-  let bid = Math.max(2, Math.min(13, Math.round(est)));
-  const placed = G.bids.filter(b => b !== null);
-  if (placed.length === 3) {
-    const need = minTotalFor(G.scores) - placed.reduce((a, b) => a + b, 0);
-    if (bid < need && need - bid <= 2) bid = Math.min(13, need);
+  const hands = [[], [], [], []], cards = unknown.slice().sort(() => Math.random() - 0.5);
+  let i = 0;
+  for (let s = 0; s < 4; s++) if (s !== me) for (let k = 0; k < counts[s]; k++) hands[s].push(cards[i++]);
+  return hands;
+}
+
+function topOf(hands, color, except) {
+  let best = -1;
+  for (let s = 0; s < 4; s++) if (s !== except) for (const c of hands[s]) if (c.c === color && pw(c) > best) best = pw(c);
+  return best;
+}
+
+function policyCard(s, hands, trick) {
+  const hand = hands[s], legal = legalCards(hand, trick);
+  if (legal.length === 1) return legal[0];
+  const p = partnerOf(s);
+  if (!trick.length) {
+    const oppTrump = hands[(s + 1) % 4].some(c => c.c === TRUMP) || hands[(s + 3) % 4].some(c => c.c === TRUMP);
+    const masters = legal.filter(c => pw(c) > topOf(hands, c.c, s) && (c.c === TRUMP || !oppTrump || !voidOpp(hands, s, c.c)));
+    const side = masters.filter(c => c.c !== TRUMP);
+    if (side.length) return side[0];
+    if (masters.length && oppTrump) return masters[0];
+    const byLen = {};
+    for (const c of legal) if (c.c !== TRUMP) (byLen[c.c] = byLen[c.c] || []).push(c);
+    const suits = Object.values(byLen);
+    if (!suits.length) return cheapest(legal);
+    suits.sort((a, b) => b.length - a.length);
+    return cheapest(suits[0]);
   }
-  return bid;
+  let w = trick[0];
+  for (const t of trick) if (beats(t.card, w.card)) w = t;
+  const later = [1, 2, 3].map(k => (s + k) % 4).slice(0, 3 - trick.length);
+  const canBeat = (card, seats) => seats.some(x => legalCards(hands[x], trick).some(c => beats(c, card)));
+  if (w.seat === p && !canBeat(w.card, later.filter(x => x !== p))) return cheapest(legal);
+  const winners = legal.filter(c => beats(c, w.card));
+  if (winners.length) {
+    const opps = later.filter(x => x !== p);
+    const safe = winners.filter(c => !canBeat(c, opps));
+    return cheapest(safe.length ? safe : winners);
+  }
+  return cheapest(legal);
+}
+
+function voidOpp(hands, s, color) {
+  return [(s + 1) % 4, (s + 3) % 4].some(x => hands[x].length && !hands[x].some(c => c.c === color));
+}
+
+function playOut(hands, trick, tricks, turn) {
+  hands = hands.map(h => h.slice()); trick = trick.slice(); tricks = tricks.slice();
+  for (;;) {
+    if (trick.length === 4) {
+      let w = trick[0];
+      for (const t of trick) if (beats(t.card, w.card)) w = t;
+      tricks[w.seat]++; trick = []; turn = w.seat;
+      if (!hands[turn].length) return tricks;
+    }
+    const c = policyCard(turn, hands, trick);
+    hands[turn].splice(hands[turn].indexOf(c), 1);
+    trick.push({ seat: turn, card: c });
+    turn = (turn + 1) % 4;
+  }
+}
+
+function teamValue(seat, tricks, bids) {
+  let v = 0;
+  for (let s = 0; s < 4; s++) {
+    const pts = tricks[s] >= bids[s] ? bidPoints(bids[s]) : -bidPoints(bids[s]);
+    v += (s % 2 === seat % 2 ? 1 : -1) * pts;
+  }
+  return v + 0.05 * (tricks[seat] + tricks[partnerOf(seat)]);
 }
 
 function botCard(seat) {
-  const hand = G.hands[seat];
-  const legal = legalCards(hand, G.trick);
-  const needMore = G.tricks[seat] < G.bids[seat];
-  const low = cs => cs.slice().sort((a, b) => (a.c === TRUMP) - (b.c === TRUMP) || a.r - b.r)[0];
-  const high = cs => cs.slice().sort((a, b) => b.r - a.r)[0];
-
-  if (!G.trick.length) {
-    const nonTrump = legal.filter(c => c.c !== TRUMP);
-    if (needMore) {
-      const ace = nonTrump.find(c => c.r === 12);
-      if (ace) return ace;
-      const trumps = legal.filter(c => c.c === TRUMP);
-      if (trumps.length >= 4) return high(trumps);
-    }
-    return low(nonTrump.length ? nonTrump : legal);
+  const hand = G.hands[seat], legal = legalCards(hand, G.trick);
+  if (legal.length === 1) return legal[0];
+  const known = new Set([...G.played, ...hand.map(cid)]);
+  const unknown = ALL.filter(c => !known.has(cid(c)));
+  const counts = G.hands.map(h => h.length);
+  const score = legal.map(() => 0);
+  const t0 = now();
+  for (let n = 0; n < 600 && (n < 30 || now() - t0 < 300); n++) {
+    const hands = dealHidden(seat, unknown, counts, G.voids);
+    hands[seat] = hand;
+    legal.forEach((c, i) => {
+      const h = hands.slice(); h[seat] = hand.filter(x => x !== c);
+      const tricks = playOut(h, [...G.trick, { seat, card: c }], G.tricks, (seat + 1) % 4);
+      score[i] += teamValue(seat, tricks, G.bids);
+    });
   }
-  const winSeat = trickWinner(G.trick);
-  const winCard = G.trick.find(t => t.seat === winSeat).card;
-  const partnerWinning = winSeat === partnerOf(seat) && (winCard.r >= 11 || winCard.c === TRUMP);
-  const winners = legal.filter(c => beats(c, winCard)).sort((a, b) => (a.c === TRUMP) - (b.c === TRUMP) || a.r - b.r);
-  if (needMore && winners.length && !partnerWinning) return winners[0];
-  return low(legal);
+  let best = 0;
+  for (let i = 1; i < legal.length; i++) if (score[i] > score[best] + 1e-9 || (Math.abs(score[i] - score[best]) < 1e-9 && cheaper(legal[i], legal[best]) < 0)) best = i;
+  return legal[best];
+}
+
+function botBid(seat) {
+  const hand = G.hands[seat];
+  const mine = new Set(hand.map(cid));
+  const unknown = ALL.filter(c => !mine.has(cid(c)));
+  const dist = new Array(14).fill(0), noVoids = [[], [], [], []];
+  let n = 0;
+  const t0 = now();
+  for (; n < 800 && (n < 60 || now() - t0 < 350); n++) {
+    const hands = dealHidden(seat, unknown, [13, 13, 13, 13], noVoids);
+    hands[seat] = hand;
+    dist[playOut(hands, [], [0, 0, 0, 0], (G.dealer + 1) % 4)[seat]]++;
+  }
+  const atLeast = b => dist.slice(b).reduce((x, y) => x + y, 0) / n;
+  const ev = b => { const p = atLeast(b); return (2 * p - 1) * bidPoints(b); };
+  let bid = 2;
+  for (let b = 3; b <= 13; b++) if (ev(b) > ev(bid)) bid = b;
+  const placed = G.bids.filter(b => b !== null);
+  if (placed.length === 3) {
+    const need = minTotalFor(G.scores) - placed.reduce((a, b) => a + b, 0);
+    if (bid < need && need <= 13 && ev(need) > -1.5) bid = need;
+  }
+  return bid;
 }
 
 function botAct() {
@@ -198,7 +306,7 @@ function changed() {
 function viewFor(s) {
   return {
     phase: G.phase, round: G.round, dealer: G.dealer, turn: G.turn, msg: G.msg,
-    seats: G.seats.map(x => x && { name: x.name, kind: x.kind, on: x.kind !== 'human' || x.connected }),
+    seats: G.seats.map(x => x && { name: x.name, kind: x.kind, on: x.kind !== 'human' || x.connected, peerId: x.peerId || null, mic: !!x.mic }),
     scores: G.scores, bids: G.bids, tricks: G.tricks, trick: G.trick, lastTrick: G.lastTrick,
     counts: G.hands.map(h => h.length), lastRound: G.lastRound, winner: G.winner, clearing: G.clearing,
     minTotal: minTotalFor(G.scores), you: s, hand: sortHand(G.hands[s] || []),
@@ -239,7 +347,8 @@ function hostGame(solo) {
   net.code = makeCode();
   toast('عم جهّز الغرفة…');
   net.peer = new Peer(PREFIX + net.code);
-  net.peer.on('open', () => { showLobby(); broadcast(); });
+  net.peer.on('open', () => { G.seats[0].peerId = net.peer.id; showLobby(); broadcast(); });
+  net.peer.on('call', onIncomingCall);
   net.peer.on('error', e => {
     if (e.type === 'unavailable-id') { net.peer.destroy(); hostGame(false); return; }
     toast('مشكلة بالاتصال: ' + e.type);
@@ -270,7 +379,7 @@ function onClientMessage(conn, m) {
       if (seat < 0) { conn.send({ t: 'err', msg: 'الغرفة مليانة' }); return; }
     }
     for (const [c, s] of net.conns) if (s === seat && c !== conn) { net.conns.delete(c); try { c.close(); } catch {} }
-    G.seats[seat] = { name, kind: 'human', pid: m.pid, connected: true };
+    G.seats[seat] = { name, kind: 'human', pid: m.pid, connected: true, peerId: conn.peer, mic: false };
     net.conns.set(conn, seat);
     conn.send({ t: 'welcome', seat });
     if (G.phase === 'lobby') showLobby();
@@ -279,6 +388,7 @@ function onClientMessage(conn, m) {
   }
   const seat = net.conns.get(conn);
   if (seat == null) return;
+  if (m.t === 'mic') { if (G.seats[seat]) G.seats[seat].mic = !!m.on; changed(); if (G.phase === 'lobby') showLobby(); return; }
   const err = m.t === 'bid' ? placeBid(seat, m.v) : m.t === 'play' ? playCard(seat, m.id) : null;
   if (err) conn.send({ t: 'err', msg: err }); else changed();
 }
@@ -288,6 +398,7 @@ function joinGame(code) {
   net.code = code;
   toast('عم إتصل بالغرفة…');
   net.peer = new Peer();
+  net.peer.on('call', onIncomingCall);
   net.peer.on('open', () => {
     const conn = net.peer.connect(PREFIX + code, { reliable: true });
     net.hostConn = conn;
@@ -301,6 +412,51 @@ function joinGame(code) {
     conn.on('close', () => showModal(`<h3>انقطع الاتصال بالمضيف</h3><p class="muted center">إذا المضيف سكّر اللعبة بتنتهي الغرفة.</p><button class="p" onclick="location.reload()">إعادة الاتصال</button>`));
   });
   net.peer.on('error', e => toast(e.type === 'peer-unavailable' ? 'الغرفة مش موجودة أو المضيف مسكّر' : 'مشكلة بالاتصال: ' + e.type));
+}
+
+// ---------- voice chat: each player with the mic on calls every other human ----------
+const voice = { stream: null, on: false, out: new Map(), audio: new Map() };
+
+function onIncomingCall(call) {
+  call.answer();
+  call.on('stream', s => {
+    let a = voice.audio.get(call.peer);
+    if (!a) { a = document.createElement('audio'); a.autoplay = true; a.setAttribute('playsinline', ''); document.body.appendChild(a); voice.audio.set(call.peer, a); }
+    a.srcObject = s;
+    a.play().catch(() => {});
+  });
+}
+
+function dialPeers() {
+  if (!voice.stream || !net.peer || !net.peer.id || !lastView || !lastView.seats) return;
+  for (const x of lastView.seats) {
+    if (!x || !x.peerId || x.peerId === net.peer.id || !x.on || voice.out.has(x.peerId)) continue;
+    const call = net.peer.call(x.peerId, voice.stream);
+    if (!call) continue;
+    voice.out.set(x.peerId, call);
+    const drop = () => { if (voice.out.get(x.peerId) === call) voice.out.delete(x.peerId); };
+    call.on('close', drop);
+    call.on('error', drop);
+  }
+}
+
+async function toggleMic() {
+  if (!voice.stream) {
+    try {
+      voice.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    } catch {
+      toast('ما قدرت افتح الميكروفون — اسمحلو من إعدادات المتصفح');
+      return;
+    }
+  }
+  voice.on = !voice.on;
+  voice.stream.getAudioTracks().forEach(t => { t.enabled = voice.on; });
+  for (const a of voice.audio.values()) a.play().catch(() => {});
+  document.querySelectorAll('.micBtn').forEach(b => { b.classList.toggle('live', voice.on); b.textContent = voice.on ? '🎤' : '🔇'; });
+  toast(voice.on ? 'الميكروفون شغّال — أصحابك عم يسمعوك' : 'سكّرت الميكروفون');
+  if (net.mode === 'host') { G.seats[0].mic = voice.on; changed(); if (G.phase === 'lobby') showLobby(); }
+  else if (net.hostConn && net.hostConn.open) net.hostConn.send({ t: 'mic', on: voice.on });
+  dialPeers();
 }
 
 // local actions: host applies directly, client sends to host
@@ -322,7 +478,7 @@ function hideModal() { $('modal').classList.add('hidden'); }
 $('modal').onclick = e => { if (e.target.id === 'modal' && !$('modal').dataset.lock) hideModal(); };
 
 function cardHTML(c, extra = '') {
-  return `<div class="card c-${c.c} ${extra}" data-id="${cid(c)}"><span class="cr">${label(c.r)}</span><div class="mid"><span>${label(c.r)}</span></div>${c.c === TRUMP ? '<span class="tr">★</span>' : ''}</div>`;
+  return `<div class="card c-${c.c} ${extra}" data-id="${cid(c)}"><span class="cr">${face(c.r)}</span><div class="mid"><span>${label(c.r)}</span></div>${c.c === TRUMP ? '<span class="tr">★</span>' : ''}</div>`;
 }
 
 function roomLink() { return location.origin + location.pathname + '?room=' + net.code; }
@@ -340,24 +496,28 @@ function showLobby() {
   $('seats').innerHTML = G.seats.map((x, s) => {
     const right = x ? (x.kind === 'bot' ? `<button data-rm="${s}">شيل</button>` : x.kind === 'host' ? '<span class="muted">أنت</span>' : '<span class="muted">متصل</span>')
       : `<button data-bot="${s}">+ بوت</button>`;
-    return `<div class="seatRow ${s % 2 ? 't1' : ''}"><span class="num">${s + 1}</span><span class="nm">${x ? x.name : '<span class="muted">فاضي…</span>'}</span>${right}</div>`;
+    return `<div class="seatRow ${s % 2 ? 't1' : ''}"><span class="num">${s + 1}</span><span class="nm">${x ? x.name + (x.mic ? ' 🎤' : '') : '<span class="muted">فاضي…</span>'}</span>${right}</div>`;
   }).join('');
   $('seats').querySelectorAll('[data-bot]').forEach(b => b.onclick = () => { const s = +b.dataset.bot; G.seats[s] = { name: botName(s), kind: 'bot' }; showLobby(); broadcast(); });
   $('seats').querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { G.seats[+b.dataset.rm] = null; showLobby(); broadcast(); });
 }
 
 function showClientLobby(v) {
+  lastView = v;
+  dialPeers();
   show('lobby');
   $('shareBox').classList.add('hidden');
   $('roomCode').textContent = v.room;
   $('btnStart').classList.add('hidden');
   $('lobbyWait').classList.remove('hidden');
-  $('seats').innerHTML = v.seats.map((x, s) => `<div class="seatRow ${s % 2 ? 't1' : ''}"><span class="num">${s + 1}</span><span class="nm">${x ? x.name : '<span class="muted">فاضي…</span>'}</span>${s === v.you ? '<span class="muted">أنت</span>' : ''}</div>`).join('');
+  $('seats').innerHTML = v.seats.map((x, s) => `<div class="seatRow ${s % 2 ? 't1' : ''}"><span class="num">${s + 1}</span><span class="nm">${x ? x.name + (x.mic ? ' 🎤' : '') : '<span class="muted">فاضي…</span>'}</span>${s === v.you ? '<span class="muted">أنت</span>' : ''}</div>`).join('');
 }
 
 let lastView = null;
 function render(v) {
   lastView = v;
+  dialPeers();
+  document.querySelectorAll('.micBtn').forEach(b => b.classList.toggle('hidden', !v.room));
   if (v.phase === 'lobby') return;
   const me = v.you;
   const rel = s => (s - me + 4) % 4;      // 0 bottom, 1 right, 2 top, 3 left
@@ -375,7 +535,7 @@ function render(v) {
     const st = v.phase === 'bidding' && v.bids[s] == null ? (v.turn === s ? 'عم يطلب…' : '') : `طلب ${bid} · أكل ${v.tricks[s]}`;
     const backs = rel(s) === 0 ? '' : `<div class="backs">${'<i></i>'.repeat(Math.min(v.counts[s], 13))}</div>`;
     el.className = `seat s-${['bottom', 'right', 'top', 'left'][rel(s)]} ${v.turn === s && (v.phase === 'bidding' || v.phase === 'playing') && !v.clearing ? 'turn' : ''} ${x && !x.on ? 'off' : ''}`;
-    el.innerHTML = `<span class="nm">${x ? x.name : '—'}${s === v.dealer ? ' 🂠' : ''}</span><span class="st">${st}</span>${backs}`;
+    el.innerHTML = `<span class="nm">${x ? x.name : '—'}${x && x.mic ? ' 🎤' : ''}${s === v.dealer ? ' 🂠' : ''}</span><span class="st">${st}</span>${backs}`;
   }
 
   const shownTrick = v.trick.length ? v.trick : [];
@@ -429,8 +589,8 @@ function showRules() {
   $('modal').dataset.rules = '1';
   showModal(`<h3>قواعد الـ 400 بورق الأونو</h3><ul>
 <li>4 لاعبين بفريقين: الشريك بيقعد مقابلك.</li>
-<li>الورق: 4 ألوان × 13 ورقة (0–9، ⊘ منع، ⇄ عكس، +2). كل لاعب بياخد 13 ورقة.</li>
-<li>الترتيب من الأصغر للأكبر: 0، 1 … 9، ⊘، ⇄، +2.</li>
+<li>الورق: 4 ألوان × 13 ورقة. كل لاعب بياخد 13 ورقة.</li>
+<li><b>القوة من الأكبر للأصغر:</b> 1 = الآص (A)، ⊘ التوقيف = الري (K)، +2 = البنت (Q)، ⇄ وردة الدور = الشب (J)، 0 = العشرة (10)، وبعدين 9، 8 … 2. الحرف بزاوية الورقة بيذكّرك.</li>
 <li><b>الأحمر ★ طرنيب دايماً</b> (بدل الكبة).</li>
 <li>كل لاعب بيطلب قديش أكلة رح ياكل (من 2 لـ 13). إذا مجموع الطلبات أقل من 11 بينعاد التوزيع (12 إذا حدا وصل 30، و13 إذا حدا وصل 40).</li>
 <li>لازم تلحق اللون الملعوب إذا معك منه، وإلا فيك تطرنب أو ترمي أي ورقة. أعلى طرنيب بياكل، وإلا أعلى ورقة من اللون الملعوب.</li>
@@ -458,6 +618,28 @@ $('btnCopy').onclick = async () => { try { await navigator.clipboard.writeText(r
 const inviteText = () => `تعا العب معي 400 بورق الأونو 🃏\n${roomLink()}`;
 $('btnWa').onclick = () => window.open('https://wa.me/?text=' + encodeURIComponent(inviteText()), '_blank');
 $('btnShare').onclick = () => { if (navigator.share) navigator.share({ title: '400 أونو', text: inviteText() }).catch(() => {}); else $('btnCopy').onclick(); };
+document.querySelectorAll('.micBtn').forEach(b => b.onclick = toggleMic);
+
+let installEvt = null;
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+if (!standalone) $('btnInstall').classList.remove('hidden');
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; });
+window.addEventListener('appinstalled', () => { $('btnInstall').classList.add('hidden'); toast('نزل التطبيق ✓ لاقيه عالشاشة'); });
+$('btnInstall').onclick = async () => {
+  if (installEvt) {
+    installEvt.prompt();
+    const r = await installEvt.userChoice.catch(() => null);
+    if (r && r.outcome === 'accepted') $('btnInstall').classList.add('hidden');
+    installEvt = null;
+    return;
+  }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  $('modal').dataset.rules = '';
+  showModal(ios
+    ? `<h3>نزّل اللعبة على الآيفون</h3><ol class="steps"><li>افتح الرابط من <b>Safari</b></li><li>كبّس زر المشاركة <b>⬆️</b> تحت</li><li>اختار <b>Add to Home Screen</b> (إضافة إلى الشاشة الرئيسية)</li><li>كبّس <b>Add</b></li></ol><button class="p" onclick="document.getElementById('modal').classList.add('hidden')">تمام</button>`
+    : `<h3>نزّل اللعبة على التلفون</h3><ol class="steps"><li>افتح الرابط من <b>Chrome</b></li><li>كبّس القائمة <b>⋮</b> فوق</li><li>اختار <b>Install app</b> أو <b>Add to Home screen</b></li></ol><button class="p" onclick="document.getElementById('modal').classList.add('hidden')">تمام</button>`);
+};
+
 window.addEventListener('beforeunload', e => { if (net.mode === 'host' && G && G.phase !== 'lobby') { e.preventDefault(); e.returnValue = ''; } });
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

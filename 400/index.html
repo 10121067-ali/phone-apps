@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="400 أونو">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>400 بورق الأونو</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -26,6 +26,7 @@
   </div>
   <button class="big p" id="btnHost">أنشئ غرفة وادعُ أصحابك</button>
   <button class="big" id="btnBots">العب ضد البوتات</button>
+  <button class="big install hidden" id="btnInstall">📲 نزّل التطبيق عندك</button>
   <button class="link" id="btnRules">القواعد</button>
 </div>
 
@@ -37,6 +38,7 @@
     <div class="linkRow"><input id="roomLink" readonly><button id="btnCopy">نسخ</button></div>
     <div class="row2"><button class="wa" id="btnWa">واتساب</button><button id="btnShare">مشاركة</button></div>
   </div>
+  <button class="micBtn micWide" type="button">🔇</button>
   <div class="muted center">الشريك بيقعد مقابلك: المقعد 1 مع 3، و2 مع 4</div>
   <div id="seats"></div>
   <button class="big p" id="btnStart">ابدأ اللعبة</button>
@@ -48,6 +50,7 @@
 <div id="game" class="screen">
   <div class="topbar">
     <div id="teams" class="teams"></div>
+    <button class="icon micBtn hidden" type="button">🔇</button>
     <button class="icon" id="btnRules2">؟</button>
   </div>
   <div id="table" class="table">
