@@ -1,0 +1,15 @@
+{
+  "name": "400 بورق الأونو",
+  "short_name": "400 أونو",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b3b2e",
+  "theme_color": "#0b3b2e",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

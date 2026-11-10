@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="توقع اليوم">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>توقع اليوم — دقيقة بدقيقة</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <select id="sym"></select>
+  <div class="status"><span id="dot" class="dot"></span><span id="stat">…</span></div>
+</header>
+
+<div id="catch" class="catch"></div>
+
+<main>
+  <section class="hero">
+    <div class="muted" id="symName"></div>
+    <div class="price" id="price">—</div>
+    <div class="row"><span id="chg" class="chg">—</span><span class="muted" id="asof"></span></div>
+  </section>
+
+  <section class="cards">
+    <div class="card"><div class="muted">المتوقع آخر اليوم (23:59)</div><div class="big" id="eod">—</div><div class="muted" id="eodRange"></div></div>
+    <div class="card"><div class="muted">المتوقع بعد ساعة</div><div class="big" id="h1">—</div><div class="muted" id="h1Range"></div></div>
+  </section>
+
+  <section class="chartWrap">
+    <canvas id="cv"></canvas>
+    <div id="tip" class="tip"></div>
+    <div class="legend">
+      <span><i class="l-act"></i>الفعلي</span>
+      <span><i class="l-day"></i>توقع منتصف الليل</span>
+      <span><i class="l-live"></i>التوقع المحدَّث</span>
+    </div>
+  </section>
+
+  <section class="cards three">
+    <div class="card"><div class="muted">دقة توقع منتصف الليل</div><div class="big" id="accDay">—</div><div class="muted" id="accDaySub"></div></div>
+    <div class="card"><div class="muted">دقة التوقع قبل ساعة</div><div class="big" id="accH">—</div><div class="muted" id="accHSub"></div></div>
+    <div class="card"><div class="muted">صحة الاتجاه</div><div class="big" id="accDir">—</div><div class="muted">صعود أو نزول</div></div>
+  </section>
+
+  <section>
+    <div class="tabs">
+      <button data-f="next" class="on">من الآن</button>
+      <button data-f="all">كل اليوم</button>
+      <button data-f="past">اللي مضى</button>
+    </div>
+    <div class="tableWrap">
+      <table>
+        <thead><tr><th>الوقت</th><th>المتوقع</th><th>المدى (80%)</th><th>الفعلي</th><th>الخطأ</th></tr></thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="note">التوقع إحصائي: كل دقيقة بيعيد التطبيق تحليل آخر 7 أيام (نمط التقلب حسب ساعة اليوم، والاتجاه الأخير، والزخم)، وبيحسب القيمة المتوقعة لكل دقيقة لآخر اليوم مع مدى ثقة 80%. الأسعار ما بتنعرف بالزبط مسبقاً — هيدا مش نصيحة استثمارية. البيانات من Binance (عملة USDT ≈ دولار).</p>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

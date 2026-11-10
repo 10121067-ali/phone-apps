@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0b3b2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="400 أونو">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>400 بورق الأونو</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+<!-- Home -->
+<div id="home" class="screen on">
+  <div class="logo"><span class="c c-R">4</span><span class="c c-Y">0</span><span class="c c-B">0</span></div>
+  <h1>400 بورق الأونو</h1>
+  <input id="name" maxlength="14" placeholder="اسمك">
+  <div id="joinBox" class="hidden">
+    <button class="big p" id="btnJoin">انضم للغرفة <b id="joinCode"></b></button>
+  </div>
+  <button class="big p" id="btnHost">أنشئ غرفة وادعُ أصحابك</button>
+  <button class="big" id="btnBots">العب ضد البوتات</button>
+  <button class="link" id="btnRules">القواعد</button>
+</div>
+
+<!-- Lobby -->
+<div id="lobby" class="screen">
+  <h2>الغرفة <span id="roomCode" class="code"></span></h2>
+  <div id="shareBox" class="box">
+    <div class="muted">ابعت هالرابط لأصحابك:</div>
+    <div class="linkRow"><input id="roomLink" readonly><button id="btnCopy">نسخ</button></div>
+    <div class="row2"><button class="wa" id="btnWa">واتساب</button><button id="btnShare">مشاركة</button></div>
+  </div>
+  <div class="muted center">الشريك بيقعد مقابلك: المقعد 1 مع 3، و2 مع 4</div>
+  <div id="seats"></div>
+  <button class="big p" id="btnStart">ابدأ اللعبة</button>
+  <div id="lobbyWait" class="muted center hidden">ناطرين المضيف يبلّش…</div>
+  <button class="link" id="btnLeave">رجوع</button>
+</div>
+
+<!-- Game -->
+<div id="game" class="screen">
+  <div class="topbar">
+    <div id="teams" class="teams"></div>
+    <button class="icon" id="btnRules2">؟</button>
+  </div>
+  <div id="table" class="table">
+    <div class="seat s-top" id="p2"></div>
+    <div class="seat s-right" id="p1"></div>
+    <div class="seat s-left" id="p3"></div>
+    <div class="seat s-bottom" id="p0"></div>
+    <div id="trick" class="trick"></div>
+    <div id="center" class="centerMsg"></div>
+  </div>
+  <div id="bidPanel" class="panel hidden">
+    <div class="muted" id="bidInfo"></div>
+    <div id="bidBtns" class="bidBtns"></div>
+  </div>
+  <div id="hand" class="hand"></div>
+</div>
+
+<!-- Modal -->
+<div id="modal" class="modal hidden"><div class="sheet" id="sheet"></div></div>
+<div id="toast" class="toast"></div>
+
+<script src="game.js"></script>
+</body>
+</html>
